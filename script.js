@@ -5,10 +5,16 @@ window.addEventListener('DOMContentLoaded', init);
 let spotLight;
 let isRevealing = false;
 
-// Variables to store the avatar's body parts
+// Avatar parts
 let myAvatar = null;
 let neckBone = null;
 let spineBone = null;
+
+// Mouse Tracking Variables
+let mouseX = 0;
+let mouseY = 0;
+let targetNeckX = 0;
+let targetNeckY = 0;
 
 function init() {
 
@@ -24,6 +30,14 @@ function init() {
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.outputEncoding = THREE.sRGBEncoding; 
     document.body.appendChild(renderer.domElement);
+
+    // --- Capture Mouse Movement ---
+    document.addEventListener('mousemove', (event) => {
+        const windowHalfX = window.innerWidth / 2;
+        const windowHalfY = window.innerHeight / 2;
+        mouseX = (event.clientX - windowHalfX) / windowHalfX;
+        mouseY = (event.clientY - windowHalfY) / windowHalfY;
+    });
 
     // --- 2. Lighting ---
     spotLight = new THREE.SpotLight(0xffffff, 1); 
@@ -46,28 +60,25 @@ function init() {
     loader.load('man.glb', (gltf) => {
         
         const object = gltf.scene;
-        myAvatar = object; // Save for animation
+        myAvatar = object;
 
-        // 🛠️ FIX 1: FACING FRONT
+        // Facing Front
         object.rotation.y = 1.7; 
 
-        // 🛠️ FIX 2: POSE ADJUSTMENT
+        // Arms Down
         const armAngle = 1.3; 
 
         object.traverse((node) => {
             if (node.isBone) {
                 const name = node.name.toLowerCase();
-                
-                // --- Save bones for "Alive" animation ---
+
                 if (name.includes('neck') || name.includes('head')) {
                     neckBone = node;
                 }
-                if (name.includes('spine') || name.includes('hips')) {
+                if (name.includes('spine')) {
                     spineBone = node;
                 }
-                // ----------------------------------------
-
-                // Fix Arms
+                
                 if (name === 'rightarm') {
                     node.rotation.set(0, 0, 0); 
                     node.rotation.x = armAngle; 
@@ -79,7 +90,7 @@ function init() {
             }
         });
 
-        // --- Auto-center and Auto-scale ---
+        // Auto-center
         const box = new THREE.Box3().setFromObject(object);
         const center = new THREE.Vector3();
         box.getCenter(center);
@@ -92,10 +103,9 @@ function init() {
         object.scale.set(scaleFactor, scaleFactor, scaleFactor);
         object.position.sub(center.multiplyScalar(scaleFactor));
         object.position.y -= 0.5;
-        object.position.x += 1.5; // Move side for text
+        object.position.x += 1.5; 
 
         scene.add(object);
-        
         startSequence();
 
     }, undefined, (error) => {
@@ -106,31 +116,31 @@ function init() {
     function animate() {
         requestAnimationFrame(animate);
 
-        // 1. Spotlight Fade In
         if (isRevealing && spotLight.intensity < 1.5) {
             spotLight.intensity += 0.01; 
         }
 
-        // 2. "ALIVE" Animation (Breathing & Swaying)
         if (myAvatar) {
-            // Get current time in seconds
             const time = Date.now() * 0.001; 
 
-            // A. Breathing (Move up and down slightly)
-            // Math.sin creates a wave that goes -1 to 1
+            // Breathing
             myAvatar.position.y = -0.5 + (Math.sin(time * 2) * 0.005);
-
-            // B. Neck Sway (Look around slightly)
-            if (neckBone) {
-                // Rotate neck left/right very slowly
-                neckBone.rotation.y = Math.sin(time * 0.5) * 0.1; 
-                // Nod head up/down very slightly
-                neckBone.rotation.x = Math.sin(time * 0.3) * 0.05; 
-            }
-
-            // C. Spine Sway (Subtle body balance)
+            
+            // Spine Sway
             if (spineBone) {
                 spineBone.rotation.z = Math.sin(time * 1) * 0.02;
+            }
+
+            // --- MOUSE TRACKING (FIXED UP/DOWN) ---
+            if (neckBone) {
+                
+                targetNeckY = mouseX * 0.6;   
+                
+                // 🛠️ FIX IS HERE: Changed -mouseY to +mouseY
+                targetNeckX = mouseY * 0.4;  
+
+                neckBone.rotation.y = THREE.MathUtils.lerp(neckBone.rotation.y, targetNeckY, 0.1);
+                neckBone.rotation.x = THREE.MathUtils.lerp(neckBone.rotation.x, targetNeckX, 0.1);
             }
         }
 
@@ -157,7 +167,6 @@ function startSequence() {
     
     if (playPromise !== undefined) {
         playPromise.then(() => {
-            // Audio playing
         }).catch(error => {
             console.warn("Audio blocked. Using timer.");
             setTimeout(revealMan, 2000);
